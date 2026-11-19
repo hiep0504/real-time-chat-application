@@ -1,0 +1,155 @@
+
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>WebSocket Chat Test</title>
+    <script src="https://cdn.jsdelivr.net/npm/@stomp/stompjs@7/bundles/stomp.umd.min.js"></script>
+</head>
+<body>
+    <h2>Spring Boot WebSocket Chat Test</h2>
+
+    <label>JWT Token:</label><br>
+    <textarea id="token" rows="4" cols="65"></textarea>
+
+    <br><br>
+
+    <label>Conversation ID:</label><br>
+    <input id="conversationId" size="65">
+
+    <br><br>
+
+    <button onclick="connect()">Connect</button>
+    <button onclick="disconnect()">Disconnect</button>
+
+    <p id="status">Disconnected</p>
+
+    <hr>
+
+    <label>Message:</label><br>
+    <input id="content" size="55">
+    <button onclick="sendMessage()">Send</button>
+
+    <h3>Received messages</h3>
+    <pre id="messages"></pre>
+
+    <script>
+        let client = null;
+
+        function log(message) {
+            document.getElementById("messages")
+                .textContent += message + "\n";
+        }
+
+        function connect() {
+            const token = document.getElementById("token")
+                .value.trim();
+
+            const conversationId =
+                document.getElementById("conversationId")
+                    .value.trim();
+
+            if (!token || !conversationId) {
+                alert("Please enter JWT and Conversation ID");
+                return;
+            }
+
+            if (client && client.active) {
+                alert("Already connected");
+                return;
+            }
+
+            client = new StompJs.Client({
+                brokerURL: "ws://localhost:8080/ws",
+
+                connectHeaders: {
+                    Authorization: "Bearer " + token
+                },
+
+                reconnectDelay: 0,
+
+                onConnect: () => {
+                    document.getElementById("status")
+                        .textContent = "Connected";
+
+                    log("STOMP connected");
+
+                    client.subscribe(
+                        "/topic/conversations/" + conversationId,
+                        (message) => {
+                            const data = JSON.parse(message.body);
+
+                            log(
+                                "Received: " +
+                                JSON.stringify(data, null, 2)
+                            );
+                        }
+                    );
+                },
+
+                onStompError: (frame) => {
+                    document.getElementById("status")
+                        .textContent = "STOMP error";
+
+                    log(
+                        "STOMP error: " +
+                        (frame.headers.message || frame.body)
+                    );
+                },
+
+                onWebSocketError: (error) => {
+                    log("WebSocket connection error");
+                    console.error(error);
+                },
+
+                onWebSocketClose: () => {
+                    document.getElementById("status")
+                        .textContent = "Disconnected";
+                }
+            });
+
+            client.activate();
+        }
+
+        function sendMessage() {
+            if (!client || !client.connected) {
+                alert("Connect first");
+                return;
+            }
+
+            const conversationId =
+                document.getElementById("conversationId")
+                    .value.trim();
+
+            const content =
+                document.getElementById("content")
+                    .value.trim();
+
+            if (!content) {
+                alert("Message cannot be empty");
+                return;
+            }
+
+            client.publish({
+                destination: "/app/chat.send",
+                body: JSON.stringify({
+                    conversationId: conversationId,
+                    content: content
+                })
+            });
+
+            log("Sent: " + content);
+        }
+
+        function disconnect() {
+            if (client) {
+                client.deactivate();
+                client = null;
+            }
+
+            document.getElementById("status")
+                .textContent = "Disconnected";
+        }
+    </script>
+</body>
+</html>
