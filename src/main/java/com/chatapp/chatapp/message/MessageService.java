@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 
 import java.time.Instant;
+import java.util.Map;
 
 @Service
 public class MessageService {
@@ -244,7 +245,24 @@ public class MessageService {
         message.setUpdatedAt(Instant.now());
 
         // 9. Lưu MongoDB
-        return messageRepository.save(message);
+        Message updatedMessage = messageRepository.save(message);
+
+        // 10. Tạo sự kiện cập nhật
+        Map<String, Object> event = Map.of(
+                "event", "MESSAGE_UPDATED",
+                "messageId", updatedMessage.getId(),
+                "conversationId", updatedMessage.getConversationId(),
+                "content", updatedMessage.getContent(),
+                "updatedAt", updatedMessage.getUpdatedAt().toString()
+        );
+
+        // 11. Broadcast qua WebSocket
+        messagingTemplate.convertAndSend(
+        "/topic/conversations/" + updatedMessage.getConversationId(),
+        (Object) event
+        );
+
+        return updatedMessage;
     }
 
     public void deleteMessage(
@@ -301,7 +319,20 @@ public class MessageService {
         message.setUpdatedAt(Instant.now());
 
         // 7. Lưu thay đổi
-        messageRepository.save(message);
+        Message deletedMessage = messageRepository.save(message);
+
+        // 8. Tạo sự kiện xóa
+        Map<String, Object> event = Map.of(
+                "event", "MESSAGE_DELETED",
+                "messageId", deletedMessage.getId(),
+                "conversationId", deletedMessage.getConversationId()
+        );
+
+        // 9. Broadcast qua WebSocket
+        messagingTemplate.convertAndSend(
+                "/topic/conversations/" + deletedMessage.getConversationId(),
+                (Object)event
+        );
     }
 
 
